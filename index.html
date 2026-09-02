@@ -32,9 +32,14 @@
     import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
     // Configuración Segura
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-      apiKey: "local-test-key",
-      projectId: "sweetcontrol-local"
+   const firebaseConfig = {
+      apiKey: "AIzaSyDxRbgfPR04Ecn0RPbDXFRXrY0gC1qf638",
+      authDomain: "sweetcontrol-bd.firebaseapp.com",
+      projectId: "sweetcontrol-bd",
+      storageBucket: "sweetcontrol-bd.firebasestorage.app",
+      messagingSenderId: "1062190162900",
+      appId: "1:1062190162900:web:055631b9cd40239450ec41",
+      measurementId: "G-CY32ETW41C"
     };
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
