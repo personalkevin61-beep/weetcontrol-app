@@ -26,13 +26,13 @@
   <script type="text/babel" data-type="module">
     const { useState, useEffect } = React;
     
-    // Importaciones de Base de Datos (Firebase en la Nube)
+    // Importaciones de Base de Datos (Agregamos getDocs para el borrado masivo)
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
     // Configuración Segura
-   const firebaseConfig = {
+    const firebaseConfig = {
       apiKey: "AIzaSyDxRbgfPR04Ecn0RPbDXFRXrY0gC1qf638",
       authDomain: "sweetcontrol-bd.firebaseapp.com",
       projectId: "sweetcontrol-bd",
@@ -143,11 +143,8 @@
               </div>
               <h2 className="text-2xl font-black mb-2">Conexión a la Nube Bloqueada</h2>
               <p className="text-base text-gray-600 font-medium mb-6">
-                Estás abriendo este sistema directamente desde tu computadora (archivo <span className="font-mono bg-gray-100 px-1 rounded text-red-500">file:///</span>). Por seguridad, la base de datos bloquea el acceso local.
+                Estás abriendo este sistema directamente desde tu computadora. Por seguridad, la base de datos bloquea el acceso local.
               </p>
-              <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-left text-sm text-indigo-800 mb-6">
-                <strong>Solución para Kevin:</strong> Para que este sistema funcione con persistencia de datos, debes alojar este archivo HTML en un servidor web. Te sugiero plataformas gratuitas y profesionales como <b>Vercel</b>, <b>Netlify</b> o <b>GitHub Pages</b>. ¡Subes el archivo y tendrás un enlace real para tu cliente!
-              </div>
               <p className="text-xs text-gray-400">Detalle técnico: {authError}</p>
             </div>
           </div>
@@ -166,7 +163,6 @@
         return `${symbol}${converted.toFixed(2)}`;
       };
 
-      // INTELIGENCIA DE UNIDADES (Gramos a Kilos, Mililitros a Litros)
       const formatUnit = (amount, unit) => {
         if (amount >= 1000 && unit === 'g') return `${(amount / 1000).toFixed(2)} kg`;
         if (amount >= 1000 && unit === 'ml') return `${(amount / 1000).toFixed(2)} L`;
@@ -189,9 +185,8 @@
         }, 0);
       };
 
-      // CÁLCULO INTELIGENTE: Cuántos Lotes COMPLETOS de la receta se pueden hacer, y cuántas porciones individuales son eso.
       const calculateMaxYield = (recipe) => {
-        let maxBatches = Infinity; // Cuántas veces podemos hacer la receta entera
+        let maxBatches = Infinity; 
         for (const req of recipe.ingredients) {
           const ing = ingredients.find(i => i.id === req.ingredientId);
           if (!ing || ing.stock < req.qty || req.qty === 0) return { batches: 0, portions: 0 };
@@ -201,7 +196,7 @@
         if (maxBatches === Infinity) return { batches: 0, portions: 0 };
         return {
           batches: maxBatches,
-          portions: maxBatches * (recipe.portions || 1) // Multiplicamos los lotes por las porciones de la receta
+          portions: maxBatches * (recipe.portions || 1) 
         };
       };
 
@@ -209,15 +204,13 @@
         e.preventDefault();
         const fd = new FormData(e.target);
         const ingredientId = fd.get('ingredientId');
-        const qty = parseFloat(fd.get('qty')); // Cantidad que entra, siempre en gramos/ml
+        const qty = parseFloat(fd.get('qty'));
         const totalCost = parseFloat(fd.get('totalCost'));
 
         if (qty <= 0 || totalCost <= 0) return showNotification("Los valores deben ser mayores a 0", 'error');
-
         const ing = ingredients.find(i => i.id === ingredientId);
         if (!ing) return;
 
-        // Promedio Ponderado del Costo
         const currentTotalValue = (ing.stock || 0) * (ing.costPerUnit || 0);
         const newTotalValue = currentTotalValue + totalCost;
         const newStock = (ing.stock || 0) + qty;
@@ -268,7 +261,7 @@
         e.preventDefault();
         const fd = new FormData(e.target);
         const recipeId = fd.get('recipeId');
-        const batchesToMake = parseInt(fd.get('batches')); // Ahora preguntamos cuántas VECES va a preparar la receta
+        const batchesToMake = parseInt(fd.get('batches')); 
         
         const recipe = recipes.find(r => r.id === recipeId);
         if (!recipe) return;
@@ -279,7 +272,6 @@
         }
 
         try {
-          // Descontar inventario crudo
           for (const req of recipe.ingredients) {
             const ing = ingredients.find(i => i.id === req.ingredientId);
             if (ing) {
@@ -287,15 +279,13 @@
             }
           }
           
-          // Calcular cuántas porciones individuales se generaron y sumarlas al stock de venta
           const portionsProduced = batchesToMake * recipe.portions;
           const currentStock = recipe.stock || 0;
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'recipes', recipe.id), { stock: currentStock + portionsProduced }, { merge: true });
 
-          // Informar al usuario
           const remainingPortions = (yieldInfo.batches - batchesToMake) * recipe.portions;
           e.target.reset();
-          showNotification(`¡Éxito! Fabricaste ${portionsProduced} porciones de ${recipe.name} y se enviaron al Stock de Ventas. Aún queda materia prima para fabricar ${remainingPortions} porciones más.`, 'success');
+          showNotification(`¡Éxito! Fabricaste ${portionsProduced} porciones de ${recipe.name}.`, 'success');
         } catch (error) {
           showNotification("Error al procesar la producción.", 'error');
         }
@@ -305,7 +295,7 @@
         e.preventDefault();
         const fd = new FormData(e.target);
         const recipeId = fd.get('recipeId');
-        const qtyToSell = parseInt(fd.get('qty')); // Se venden porciones (unidades)
+        const qtyToSell = parseInt(fd.get('qty')); 
         const salePrice = parseFloat(fd.get('price'));
         const saleType = fd.get('saleType');
         const debtorName = fd.get('debtorName');
@@ -314,16 +304,15 @@
         if (!recipe) return;
 
         if (qtyToSell > (recipe.stock || 0)) {
-          return showNotification(`Solo tienes ${recipe.stock || 0} porciones listas de ${recipe.name} para vender.`, 'error');
+          return showNotification(`Solo tienes ${recipe.stock || 0} porciones listas.`, 'error');
         }
 
         try {
-          // Descontar stock de producto terminado
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'recipes', recipe.id), { stock: recipe.stock - qtyToSell }, { merge: true });
 
           const finalRevenue = salePrice * qtyToSell;
           const costOfWholeRecipe = calculateRecipeCost(recipe);
-          const unitCost = costOfWholeRecipe / recipe.portions; // El costo de UNA porción
+          const unitCost = costOfWholeRecipe / recipe.portions; 
           const timestamp = Date.now();
           const dateStr = new Date().toISOString().split('T')[0];
 
@@ -356,6 +345,48 @@
         });
         e.target.reset();
         showNotification("Gasto registrado.", 'success');
+      };
+
+      /* NUEVA FUNCION: Eliminar Gastos */
+      const handleDeleteExpense = async (id) => {
+        try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenses', id));
+          showNotification("Gasto eliminado del registro.", 'info');
+        } catch (err) {
+          showNotification("Error al eliminar gasto.", 'error');
+        }
+      };
+
+      /* NUEVA FUNCION: Resetear Base de Datos Masivamente con confirmación */
+      const handleResetSystem = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const confirmWord = fd.get('confirmText')?.toUpperCase().trim();
+        
+        if (confirmWord !== 'BORRAR') {
+           return showNotification("Palabra de seguridad incorrecta. No se ha borrado nada.", 'error');
+        }
+
+        try {
+           const clearCol = async (colName) => {
+              const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', colName));
+              const promises = snap.docs.map(d => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', colName, d.id)));
+              await Promise.all(promises);
+           };
+           
+           await clearCol('ingredients');
+           await clearCol('recipes');
+           await clearCol('sales');
+           await clearCol('debtors');
+           await clearCol('expenses');
+           
+           setShowModal(false);
+           setModalType('');
+           setActiveTab('dashboard');
+           showNotification("El sistema ha sido restablecido a cero por completo.", 'success');
+        } catch(err) {
+           showNotification("Hubo un problema intentando limpiar los datos.", 'error');
+        }
       };
 
       const renderDashboard = () => {
@@ -425,7 +456,6 @@
                       <td className="py-4 px-6 font-medium text-gray-800">{ing.name}</td>
                       <td className="py-4 px-6">
                         <span className={`font-semibold ${ing.stock <= 0 ? 'text-red-500' : 'text-gray-700'}`}>
-                           {/* AQUI APLICAMOS LA INTELIGENCIA DE UNIDADES */}
                            {formatUnit(ing.stock || 0, ing.unit)}
                         </span>
                       </td>
@@ -474,7 +504,7 @@
           onSave({
             id: initialData ? initialData.id : Date.now().toString(),
             name, portions, ingredients: recipeIngredients, 
-            stock: initialData ? initialData.stock : 0 // Conservamos el stock de unidades listas si se está editando
+            stock: initialData ? initialData.stock : 0 
           });
         };
 
@@ -526,7 +556,7 @@
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {recipes.map(recipe => {
               const cost = calculateRecipeCost(recipe);
-              const yieldInfo = calculateMaxYield(recipe); // Trae batches y portions
+              const yieldInfo = calculateMaxYield(recipe); 
               return (
                 <div key={recipe.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col relative group">
                   <div className="absolute top-4 right-4 flex gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
@@ -638,19 +668,13 @@
       };
 
       const renderFinances = () => {
-        // Matematica Core de Negocio
-        const totalIngresos = sales.reduce((acc, s) => acc + s.revenue, 0);
-        // El costo de reposición es la suma de (costo_unitario_porción * porciones_vendidas)
-        const costoReposicion = sales.reduce((acc, s) => acc + ((s.unitCost || 0) * s.qty), 0); 
-        const gananciaBruta = totalIngresos - costoReposicion;
+        const totalIng = sales.reduce((acc, s) => acc + s.revenue, 0);
+        const repo = sales.reduce((acc, s) => acc + ((s.unitCost || 0) * s.qty), 0);
+        const brut = totalIng - repo;
+        const totalExp = expenses.reduce((acc, e) => acc + e.amount, 0);
+        const neta = brut - totalExp;
+        const sueldo = neta > 0 ? neta * (finances.savingsPercentage / 100) : 0;
         
-        const totalGastos = expenses.reduce((acc, e) => acc + e.amount, 0);
-        const gananciaNeta = gananciaBruta - totalGastos;
-        
-        // El ahorro solo se extrae de la ganancia limpia y pura.
-        const ahorroSueldo = (gananciaNeta > 0) ? (gananciaNeta * (finances.savingsPercentage / 100)) : 0;
-        const gananciaRetenida = (gananciaNeta > 0) ? gananciaNeta - ahorroSueldo : gananciaNeta;
-
         return (
           <div className="space-y-6 animate-fade-in">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Contabilidad Real y Gastos</h2>
@@ -663,24 +687,24 @@
                 <div className="space-y-4 text-sm">
                   <div className="flex justify-between border-b border-gray-700 pb-2">
                     <span className="text-gray-400">Total Ingresos por Ventas</span>
-                    <span className="font-bold text-emerald-400">{formatCurrency(totalIngresos)}</span>
+                    <span className="font-bold text-emerald-400">{formatCurrency(totalIng)}</span>
                   </div>
                   <div className="flex justify-between border-b border-gray-700 pb-2">
                     <span className="text-gray-400">(-) Costo Reposición Ingredientes</span>
-                    <span className="font-bold text-red-400">-{formatCurrency(costoReposicion)}</span>
+                    <span className="font-bold text-red-400">-{formatCurrency(repo)}</span>
                   </div>
                   <div className="flex justify-between border-b border-gray-700 pb-2 pt-2 bg-gray-800 p-2 rounded">
                     <span className="font-medium text-gray-200">Ganancia Bruta</span>
-                    <span className="font-bold text-blue-300">{formatCurrency(gananciaBruta)}</span>
+                    <span className="font-bold text-blue-300">{formatCurrency(brut)}</span>
                   </div>
                   <div className="flex justify-between border-b border-gray-700 pb-2">
                     <span className="text-gray-400">(-) Gastos Operativos (Fijos/Var)</span>
-                    <span className="font-bold text-orange-400">-{formatCurrency(totalGastos)}</span>
+                    <span className="font-bold text-orange-400">-{formatCurrency(totalExp)}</span>
                   </div>
                   
                   <div className="flex justify-between pt-4 text-lg font-black bg-gray-800 mt-2 p-3 rounded-lg border border-gray-600">
                     <span className="text-white">GANANCIA NETA</span>
-                    <span className={gananciaNeta >= 0 ? "text-emerald-400" : "text-red-500"}>{formatCurrency(gananciaNeta)}</span>
+                    <span className={neta >= 0 ? "text-emerald-400" : "text-red-500"}>{formatCurrency(neta)}</span>
                   </div>
                 </div>
 
@@ -691,11 +715,11 @@
                       Sueldo / Libre 
                       (<input type="number" min="0" max="100" className="w-16 bg-gray-700 text-center rounded text-xs px-1 py-1 border border-gray-600 outline-none focus:border-indigo-500" value={finances.savingsPercentage} onChange={e=> setFinances({savingsPercentage: Number(e.target.value)})} />%)
                     </span>
-                    <span className="font-bold text-emerald-400 text-base">{formatCurrency(ahorroSueldo)}</span>
+                    <span className="font-bold text-emerald-400 text-base">{formatCurrency(sueldo)}</span>
                   </div>
                   <div className="flex justify-between text-sm items-center">
                     <span className="text-gray-300">Caja del Negocio (Retenida)</span>
-                    <span className="font-bold text-blue-300">{formatCurrency(gananciaRetenida)}</span>
+                    <span className="font-bold text-blue-300">{formatCurrency(neta - sueldo)}</span>
                   </div>
                 </div>
               </div>
@@ -711,13 +735,18 @@
                      <button type="submit" className="bg-orange-500 text-white px-4 rounded-xl hover:bg-orange-600 font-bold shadow-sm">Añadir</button>
                    </form>
                    
-                   {/* Mini historial de gastos */}
+                   {/* NUEVA FUNCIÓN: Eliminar Gastos con Ícono */}
                    {expenses.length > 0 && (
-                     <div className="mt-4 pt-4 border-t border-gray-100 max-h-32 overflow-y-auto">
-                        {expenses.slice(0,5).map(e => (
-                          <div key={e.id} className="flex justify-between text-xs mb-2">
-                            <span className="text-gray-600">{e.date} - {e.description}</span>
-                            <span className="font-bold text-orange-600">{formatCurrency(e.amount)}</span>
+                     <div className="mt-4 pt-4 border-t border-gray-100 max-h-48 overflow-y-auto pr-2">
+                        {expenses.map(e => (
+                          <div key={e.id} className="flex justify-between items-center text-xs mb-2 p-2 bg-orange-50 rounded group">
+                            <span className="text-gray-700 font-medium">{e.date} - {e.description}</span>
+                            <div className="flex items-center gap-3">
+                               <span className="font-bold text-orange-600">{formatCurrency(e.amount)}</span>
+                               <button onClick={() => handleDeleteExpense(e.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity" title="Eliminar gasto">
+                                 <Icon name="trash" className="w-4 h-4" />
+                               </button>
+                            </div>
                           </div>
                         ))}
                      </div>
@@ -754,6 +783,59 @@
         );
       };
 
+      /* NUEVA PESTAÑA: CONFIGURACIÓN GENERAL Y RESET DE DATOS */
+      const renderSettings = () => (
+        <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">Ajustes del Sistema</h2>
+          
+          <div className="bg-white p-6 rounded-2xl shadow-sm border space-y-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 bg-indigo-50 rounded-bl-3xl text-indigo-600"><Icon name="settings" className="w-6 h-6"/></div>
+            <h3 className="text-lg font-bold text-gray-800 border-b pb-2">Marca Blanca y Monedas</h3>
+            <form onSubmit={async (e) => { 
+              e.preventDefault(); 
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), generalSettings); 
+              showNotification("Configuración de marca guardada.", 'success'); 
+            }} className="space-y-4 pt-2">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">Nombre de la Tienda / Negocio</label>
+                <input type="text" value={generalSettings.name} onChange={e => setGeneralSettings({...generalSettings, name: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">Logo de la Tienda (Pega el enlace web de tu imagen)</label>
+                <input type="text" placeholder="Ej: https://misitio.com/logo.png" value={generalSettings.logo || ''} onChange={e => setGeneralSettings({...generalSettings, logo: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-600 block mb-1">Moneda Principal</label>
+                  <select value={generalSettings.currency} onChange={e => setGeneralSettings({...generalSettings, currency: e.target.value})} className="w-full border border-gray-300 p-2 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="USD">Dólares ($)</option>
+                    <option value="VES">Bolívares (Bs)</option>
+                    <option value="EUR">Euros (€)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-600 block mb-1">Tasa Bs ($1)</label>
+                  <input type="number" step="0.01" value={generalSettings.rateBs} onChange={e => setGeneralSettings({...generalSettings, rateBs: parseFloat(e.target.value)})} className="w-full border border-gray-300 p-2 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-600 block mb-1">Tasa Eur ($1)</label>
+                  <input type="number" step="0.01" value={generalSettings.rateEur} onChange={e => setGeneralSettings({...generalSettings, rateEur: parseFloat(e.target.value)})} className="w-full border border-gray-300 p-2 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <button type="submit" className="w-full sm:w-auto bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 shadow-md">Actualizar Datos de Marca</button>
+            </form>
+          </div>
+
+          <div className="bg-red-50 p-6 rounded-2xl shadow-sm border border-red-200">
+             <h3 className="text-lg font-bold text-red-800 border-b border-red-200 pb-2 flex items-center gap-2 mb-4"><Icon name="warning" className="w-5 h-5"/> Zona de Peligro (Cuidado)</h3>
+             <p className="text-sm text-red-600 mb-4 font-medium">Esta acción vaciará completamente la base de datos (Ingredientes, Recetas, Gastos y Ventas). Es útil para limpiar las pruebas antes de arrancar en vivo. No se puede deshacer.</p>
+             <button onClick={() => { setModalType('resetSystem'); setShowModal(true); }} className="bg-red-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-red-700 shadow flex items-center justify-center gap-2 w-full sm:w-auto">
+               <Icon name="trash" className="w-5 h-5"/> Restablecer Todo a Cero
+             </button>
+          </div>
+        </div>
+      );
+
       return (
         <div className="h-screen w-full flex flex-col md:flex-row overflow-hidden">
           
@@ -765,17 +847,18 @@
             </div>
           )}
 
-          {/* Sidebar */}
+          {/* Menú Lateral (Sidebar) */}
           <aside className="w-full md:w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm flex-shrink-0 overflow-y-auto">
             <div className="p-6 border-b border-gray-100 flex flex-col items-center md:items-start text-center md:text-left">
               {generalSettings.logo ? <img src={generalSettings.logo} alt="Logo" className="h-16 w-auto mb-2 object-contain rounded-lg" /> : <div className="text-indigo-700 mb-2"><Icon name="chef" className="w-8 h-8"/></div>}
               <h1 className="text-xl font-black text-gray-800 break-words w-full">{generalSettings.name}</h1>
-              <p className="text-xs text-emerald-600 mt-1 font-medium">• Negocio en la Nube</p>
+              <p className="text-xs text-emerald-600 mt-1 font-medium">• Nube Activa</p>
             </div>
             <nav className="flex-1 p-4 space-y-1 overflow-x-auto flex md:flex-col md:overflow-visible">
-              {[{ id: 'dashboard', name: 'Resumen' }, { id: 'inventory', name: 'Materia Prima' }, { id: 'recipes', name: 'Recetas y Stock' }, { id: 'production', name: 'Fábrica y Ventas' }, { id: 'finances', name: 'Contabilidad' }].map(tab => (
+              {/* Añadida pestaña de Configuración aquí */}
+              {[{ id: 'dashboard', name: 'Resumen' }, { id: 'inventory', name: 'Materia Prima' }, { id: 'recipes', name: 'Recetas y Stock' }, { id: 'production', name: 'Fábrica y Ventas' }, { id: 'finances', name: 'Contabilidad' }, { id: 'settings', name: 'Ajustes' }].map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-indigo-50 text-indigo-700 font-semibold shadow-sm border border-indigo-100' : 'text-gray-600 hover:bg-gray-100 border border-transparent'}`}>
-                  <Icon name="dashboard" className="w-5 h-5"/> {tab.name}
+                  <Icon name={tab.id === 'settings' ? 'settings' : 'dashboard'} className="w-5 h-5"/> {tab.name}
                 </button>
               ))}
               <div className="md:mt-auto pt-4 md:border-t md:border-gray-100">
@@ -784,25 +867,29 @@
             </nav>
           </aside>
 
-          {/* Main Content */}
+          {/* Área Principal */}
           <main className="flex-1 p-6 md:p-8 overflow-y-auto h-full bg-gray-50/50">
             {activeTab === 'dashboard' && renderDashboard()}
             {activeTab === 'inventory' && renderInventory()}
             {activeTab === 'recipes' && renderRecipes()}
             {activeTab === 'production' && renderProduction()}
             {activeTab === 'finances' && renderFinances()}
+            {/* Renderizar Configuración */}
+            {activeTab === 'settings' && renderSettings()}
           </main>
 
-          {/* Generic Modal Shell */}
+          {/* Área de Modales (Ventanas Emergentes) */}
           {showModal && (
             <div className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center p-4 z-40 animate-fade-in backdrop-blur-sm">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto border border-gray-100">
+                
                 {modalType === 'recipe' && (
                   <>
                     <h3 className="text-xl font-bold text-gray-800 mb-4">{editingRecipe ? 'Editar Receta' : 'Crear Receta'}</h3>
                     <CreateRecipeForm onSave={handleSaveRecipe} onCancel={() => {setShowModal(false); setEditingRecipe(null);}} inventory={ingredients} initialData={editingRecipe} />
                   </>
                 )}
+                
                 {modalType === 'addIngredient' && (
                    <form onSubmit={handleSaveIngredient} className="space-y-4">
                      <h3 className="text-xl font-bold text-gray-800 mb-4">{editingIngredient ? 'Editar Ingrediente' : 'Añadir Ingrediente'}</h3>
@@ -825,6 +912,7 @@
                      </div>
                    </form>
                 )}
+                
                  {modalType === 'addPurchase' && (
                    <form onSubmit={handleAddPurchase} className="space-y-4">
                      <h3 className="text-xl font-bold text-gray-800 mb-4">Registrar Factura de Compra</h3>
@@ -852,6 +940,28 @@
                      </div>
                    </form>
                 )}
+
+                {/* MODAL DE SEGURIDAD EXTREMA PARA BORRAR TODO */}
+                {modalType === 'resetSystem' && (
+                  <form onSubmit={handleResetSystem} className="space-y-4">
+                    <div className="bg-red-100 text-red-600 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-2 shadow-inner">
+                      <Icon name="warning" className="w-10 h-10" />
+                    </div>
+                    <h3 className="text-2xl font-black text-center text-gray-800">¿Estás absolutamente seguro?</h3>
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-center">
+                       <p className="text-sm text-gray-700 mb-3">Estás a punto de borrar <b>todo el historial de tu negocio</b> para dejarlo de fábrica.</p>
+                       <p className="text-xs text-gray-600">Para confirmar, por favor escribe la palabra <span className="font-mono font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">BORRAR</span> en la casilla.</p>
+                    </div>
+                    <div>
+                      <input required name="confirmText" type="text" className="w-full border-2 border-red-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-red-500 text-center font-bold text-xl uppercase tracking-widest" placeholder="Escribe BORRAR" />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4">
+                      <button type="button" onClick={()=>setShowModal(false)} className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold w-full">Cancelar</button>
+                      <button type="submit" className="px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 shadow-md font-black w-full uppercase">Sí, Borrar Todo</button>
+                    </div>
+                  </form>
+                )}
+
               </div>
             </div>
           )}
