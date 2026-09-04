@@ -26,10 +26,11 @@
   <script type="text/babel" data-type="module">
     const { useState, useEffect } = React;
     
-    // Importaciones de Base de Datos (Agregamos getDocs para el borrado masivo)
+    // Importaciones de Base de Datos y Storage
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
     import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+    import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js';
 
     // Configuración Segura
     const firebaseConfig = {
@@ -41,12 +42,13 @@
       appId: "1:1062190162900:web:055631b9cd40239450ec41",
       measurementId: "G-CY32ETW41C"
     };
+    
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const storage = getStorage(app); // Inicializamos Storage para las fotos
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'sweet-control-app';
 
-    // Iconos Universales
     const Icon = ({ name, className = "w-5 h-5" }) => {
       const icons = {
         dashboard: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />,
@@ -60,7 +62,8 @@
         settings: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />,
         download: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />,
         edit: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />,
-        warning: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        warning: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />,
+        upload: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
       };
       return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">{icons[name] || icons.box}</svg>;
     };
@@ -133,7 +136,6 @@
         }
       }, [user]);
 
-      // VISTA DE ERROR DE CONEXIÓN LOCAL
       if (authError) {
         return (
           <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6 text-center">
@@ -208,6 +210,7 @@
         const totalCost = parseFloat(fd.get('totalCost'));
 
         if (qty <= 0 || totalCost <= 0) return showNotification("Los valores deben ser mayores a 0", 'error');
+
         const ing = ingredients.find(i => i.id === ingredientId);
         if (!ing) return;
 
@@ -221,6 +224,7 @@
         showNotification("Compra registrada e inventario actualizado.", 'success');
       };
 
+      // MISIÓN 1: Actualizada para guardar ajustes manuales de stock y precio
       const handleSaveIngredient = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
@@ -228,13 +232,13 @@
         const data = {
           name: fd.get('name'), 
           unit: fd.get('unit'), 
-          stock: editingIngredient ? editingIngredient.stock : 0, 
-          costPerUnit: editingIngredient ? editingIngredient.costPerUnit : 0
+          stock: parseFloat(fd.get('stock')) || 0, // Ahora toma el valor manual del form
+          costPerUnit: parseFloat(fd.get('costPerUnit')) || 0 // Ahora toma el valor manual del form
         };
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ingredients', id), data, { merge: true });
         setShowModal(false);
         setEditingIngredient(null);
-        showNotification(editingIngredient ? "Ingrediente actualizado." : "Ingrediente añadido exitosamente.", 'success');
+        showNotification(editingIngredient ? "Ingrediente o stock ajustado exitosamente." : "Ingrediente añadido.", 'success');
       };
 
       const handleDeleteIngredient = async (id) => {
@@ -347,7 +351,6 @@
         showNotification("Gasto registrado.", 'success');
       };
 
-      /* NUEVA FUNCION: Eliminar Gastos */
       const handleDeleteExpense = async (id) => {
         try {
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenses', id));
@@ -357,7 +360,68 @@
         }
       };
 
-      /* NUEVA FUNCION: Resetear Base de Datos Masivamente con confirmación */
+      // MISIÓN 2: Función inteligente para subir imágenes a Firebase Storage
+      const handleLogoUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const storageRef = ref(storage, `artifacts/${appId}/public/logos/logo_${Date.now()}`);
+        try {
+          showNotification("Subiendo imagen de logo...", "info");
+          await uploadBytes(storageRef, file);
+          const url = await getDownloadURL(storageRef);
+          setGeneralSettings({...generalSettings, logo: url});
+          showNotification("¡Imagen subida con éxito! Dale a Guardar Cambios.", "success");
+        } catch (error) {
+          showNotification("Hubo un problema al subir la imagen.", "error");
+        }
+      };
+
+      // MISIÓN 3: Cierre de Ciclo Mensual/Contable
+      const handleCloseCycle = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const confirmWord = fd.get('confirmText')?.toUpperCase().trim();
+        
+        if (confirmWord !== 'CERRAR') {
+           return showNotification("Palabra de seguridad incorrecta. Operación cancelada.", 'error');
+        }
+
+        const totalIng = sales.reduce((acc, s) => acc + s.revenue, 0);
+        const repo = sales.reduce((acc, s) => acc + ((s.unitCost || 0) * s.qty), 0);
+        const totalExp = expenses.reduce((acc, exp) => acc + exp.amount, 0);
+        const neta = (totalIng - repo) - totalExp;
+
+        try {
+           // 1. Guardamos el registro histórico del ciclo
+           const cycleId = Date.now().toString();
+           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'closed_cycles', cycleId), {
+              date: new Date().toISOString().split('T')[0],
+              timestamp: Date.now(),
+              totalRevenue: totalIng,
+              totalExpenses: totalExp,
+              netProfit: neta,
+              salesCount: sales.length
+           });
+
+           // 2. Limpiamos las ventas y los gastos (Las deudas e inventario quedan intactas)
+           const clearCol = async (colName) => {
+              const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', colName));
+              const promises = snap.docs.map(d => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', colName, d.id)));
+              await Promise.all(promises);
+           };
+           
+           await clearCol('sales');
+           await clearCol('expenses');
+           
+           setShowModal(false);
+           setModalType('');
+           showNotification("¡Cierre de ciclo exitoso! Caja en cero lista para la nueva producción.", 'success');
+        } catch(err) {
+           showNotification("Hubo un problema al intentar cerrar la caja.", 'error');
+        }
+      };
+
       const handleResetSystem = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
@@ -379,6 +443,7 @@
            await clearCol('sales');
            await clearCol('debtors');
            await clearCol('expenses');
+           await clearCol('closed_cycles');
            
            setShowModal(false);
            setModalType('');
@@ -466,7 +531,7 @@
                       <td className="py-4 px-6 font-medium text-emerald-600">{formatCurrency((ing.stock || 0) * (ing.costPerUnit || 0))}</td>
                       <td className="py-4 px-6 text-center">
                          <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => { setEditingIngredient(ing); setModalType('addIngredient'); setShowModal(true); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded"><Icon name="edit" className="w-4 h-4"/></button>
+                            <button onClick={() => { setEditingIngredient(ing); setModalType('addIngredient'); setShowModal(true); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded" title="Ajuste Manual"><Icon name="edit" className="w-4 h-4"/></button>
                             <button onClick={() => handleDeleteIngredient(ing.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><Icon name="trash" className="w-4 h-4"/></button>
                          </div>
                       </td>
@@ -668,63 +733,68 @@
       };
 
       const renderFinances = () => {
-        const totalIng = sales.reduce((acc, s) => acc + s.revenue, 0);
-        const repo = sales.reduce((acc, s) => acc + ((s.unitCost || 0) * s.qty), 0);
-        const brut = totalIng - repo;
-        const totalExp = expenses.reduce((acc, e) => acc + e.amount, 0);
-        const neta = brut - totalExp;
-        const sueldo = neta > 0 ? neta * (finances.savingsPercentage / 100) : 0;
-        
+        const totalIngresos = sales.reduce((acc, s) => acc + s.revenue, 0);
+        const costoReposicion = sales.reduce((acc, s) => acc + ((s.unitCost || 0) * s.qty), 0); 
+        const gananciaBruta = totalIngresos - costoReposicion;
+        const totalGastos = expenses.reduce((acc, e) => acc + e.amount, 0);
+        const gananciaNeta = gananciaBruta - totalGastos;
+        const ahorroSueldo = (gananciaNeta > 0) ? (gananciaNeta * (finances.savingsPercentage / 100)) : 0;
+        const gananciaRetenida = (gananciaNeta > 0) ? gananciaNeta - ahorroSueldo : gananciaNeta;
+
         return (
           <div className="space-y-6 animate-fade-in">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Contabilidad Real y Gastos</h2>
+            {/* MISIÓN 3: Botón de Cierre de Ciclo en la cabecera */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+               <h2 className="text-2xl font-bold text-gray-800">Contabilidad y Gastos</h2>
+               <button onClick={() => { setModalType('closeCycle'); setShowModal(true); }} className="bg-gray-800 text-white px-5 py-2.5 rounded-xl hover:bg-gray-900 shadow-lg flex items-center justify-center gap-2 text-sm font-black w-full sm:w-auto">
+                 <Icon name="book" className="w-5 h-5"/> Cierre de Ciclo Mensual
+               </button>
+            </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Estado de Resultados (Cuentas Claras) */}
               <div className="bg-gray-900 p-6 rounded-2xl shadow-lg text-white">
-                <h3 className="text-lg font-bold mb-6 text-gray-100 flex items-center gap-2"><Icon name="dashboard"/> Estado de Resultados Reales</h3>
+                <h3 className="text-lg font-bold mb-6 text-gray-100 flex items-center gap-2"><Icon name="dashboard"/> Estado de Resultados Actual</h3>
                 
                 <div className="space-y-4 text-sm">
                   <div className="flex justify-between border-b border-gray-700 pb-2">
                     <span className="text-gray-400">Total Ingresos por Ventas</span>
-                    <span className="font-bold text-emerald-400">{formatCurrency(totalIng)}</span>
+                    <span className="font-bold text-emerald-400">{formatCurrency(totalIngresos)}</span>
                   </div>
                   <div className="flex justify-between border-b border-gray-700 pb-2">
                     <span className="text-gray-400">(-) Costo Reposición Ingredientes</span>
-                    <span className="font-bold text-red-400">-{formatCurrency(repo)}</span>
+                    <span className="font-bold text-red-400">-{formatCurrency(costoReposicion)}</span>
                   </div>
                   <div className="flex justify-between border-b border-gray-700 pb-2 pt-2 bg-gray-800 p-2 rounded">
                     <span className="font-medium text-gray-200">Ganancia Bruta</span>
-                    <span className="font-bold text-blue-300">{formatCurrency(brut)}</span>
+                    <span className="font-bold text-blue-300">{formatCurrency(gananciaBruta)}</span>
                   </div>
                   <div className="flex justify-between border-b border-gray-700 pb-2">
                     <span className="text-gray-400">(-) Gastos Operativos (Fijos/Var)</span>
-                    <span className="font-bold text-orange-400">-{formatCurrency(totalExp)}</span>
+                    <span className="font-bold text-orange-400">-{formatCurrency(totalGastos)}</span>
                   </div>
                   
                   <div className="flex justify-between pt-4 text-lg font-black bg-gray-800 mt-2 p-3 rounded-lg border border-gray-600">
                     <span className="text-white">GANANCIA NETA</span>
-                    <span className={neta >= 0 ? "text-emerald-400" : "text-red-500"}>{formatCurrency(neta)}</span>
+                    <span className={gananciaNeta >= 0 ? "text-emerald-400" : "text-red-500"}>{formatCurrency(gananciaNeta)}</span>
                   </div>
                 </div>
 
                 <div className="mt-6 p-5 bg-gray-800 rounded-xl border border-gray-700">
-                  <h4 className="text-sm font-semibold mb-4 text-indigo-300 border-b border-gray-700 pb-2">¿Cómo repartir esa Ganancia Neta?</h4>
+                  <h4 className="text-sm font-semibold mb-4 text-indigo-300 border-b border-gray-700 pb-2">Distribución Sugerida</h4>
                   <div className="flex justify-between items-center text-sm mb-3">
                     <span className="text-gray-300 flex items-center gap-2">
                       Sueldo / Libre 
                       (<input type="number" min="0" max="100" className="w-16 bg-gray-700 text-center rounded text-xs px-1 py-1 border border-gray-600 outline-none focus:border-indigo-500" value={finances.savingsPercentage} onChange={e=> setFinances({savingsPercentage: Number(e.target.value)})} />%)
                     </span>
-                    <span className="font-bold text-emerald-400 text-base">{formatCurrency(sueldo)}</span>
+                    <span className="font-bold text-emerald-400 text-base">{formatCurrency(ahorroSueldo)}</span>
                   </div>
                   <div className="flex justify-between text-sm items-center">
                     <span className="text-gray-300">Caja del Negocio (Retenida)</span>
-                    <span className="font-bold text-blue-300">{formatCurrency(neta - sueldo)}</span>
+                    <span className="font-bold text-blue-300">{formatCurrency(gananciaRetenida)}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Controles de Gastos y Deudores */}
               <div className="space-y-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-orange-100">
                    <h3 className="text-lg font-bold text-gray-800 mb-2">Registrar Gasto Operativo</h3>
@@ -735,7 +805,6 @@
                      <button type="submit" className="bg-orange-500 text-white px-4 rounded-xl hover:bg-orange-600 font-bold shadow-sm">Añadir</button>
                    </form>
                    
-                   {/* NUEVA FUNCIÓN: Eliminar Gastos con Ícono */}
                    {expenses.length > 0 && (
                      <div className="mt-4 pt-4 border-t border-gray-100 max-h-48 overflow-y-auto pr-2">
                         {expenses.map(e => (
@@ -783,7 +852,6 @@
         );
       };
 
-      /* NUEVA PESTAÑA: CONFIGURACIÓN GENERAL Y RESET DE DATOS */
       const renderSettings = () => (
         <div className="space-y-6 animate-fade-in max-w-2xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">Ajustes del Sistema</h2>
@@ -797,13 +865,27 @@
               showNotification("Configuración de marca guardada.", 'success'); 
             }} className="space-y-4 pt-2">
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">Nombre de la Tienda / Negocio</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700">Nombre del Negocio</label>
                 <input type="text" value={generalSettings.name} onChange={e => setGeneralSettings({...generalSettings, name: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
+              
+              {/* MISIÓN 2: Subida de Logo Inteligente */}
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">Logo de la Tienda (Pega el enlace web de tu imagen)</label>
-                <input type="text" placeholder="Ej: https://misitio.com/logo.png" value={generalSettings.logo || ''} onChange={e => setGeneralSettings({...generalSettings, logo: e.target.value})} className="w-full border border-gray-300 p-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+                <label className="block text-sm font-medium mb-1 text-gray-700">Logo de la Tienda (Archivo desde PC/Teléfono)</label>
+                <div className="flex gap-3 items-center mt-2">
+                  {generalSettings.logo && (
+                     <div className="h-14 w-14 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center overflow-hidden">
+                        <img src={generalSettings.logo} alt="Logo Prev" className="max-h-full object-contain" />
+                     </div>
+                  )}
+                  <label className="flex-1 cursor-pointer bg-gray-50 border border-gray-300 border-dashed hover:bg-gray-100 p-3 rounded-xl text-center flex items-center justify-center gap-2 text-sm text-gray-600 transition-colors">
+                     <Icon name="upload" className="w-5 h-5"/>
+                     <span>Seleccionar imagen...</span>
+                     <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                  </label>
+                </div>
               </div>
+
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-bold text-gray-600 block mb-1">Moneda Principal</label>
@@ -855,7 +937,6 @@
               <p className="text-xs text-emerald-600 mt-1 font-medium">• Nube Activa</p>
             </div>
             <nav className="flex-1 p-4 space-y-1 overflow-x-auto flex md:flex-col md:overflow-visible">
-              {/* Añadida pestaña de Configuración aquí */}
               {[{ id: 'dashboard', name: 'Resumen' }, { id: 'inventory', name: 'Materia Prima' }, { id: 'recipes', name: 'Recetas y Stock' }, { id: 'production', name: 'Fábrica y Ventas' }, { id: 'finances', name: 'Contabilidad' }, { id: 'settings', name: 'Ajustes' }].map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-indigo-50 text-indigo-700 font-semibold shadow-sm border border-indigo-100' : 'text-gray-600 hover:bg-gray-100 border border-transparent'}`}>
                   <Icon name={tab.id === 'settings' ? 'settings' : 'dashboard'} className="w-5 h-5"/> {tab.name}
@@ -874,7 +955,6 @@
             {activeTab === 'recipes' && renderRecipes()}
             {activeTab === 'production' && renderProduction()}
             {activeTab === 'finances' && renderFinances()}
-            {/* Renderizar Configuración */}
             {activeTab === 'settings' && renderSettings()}
           </main>
 
@@ -890,9 +970,10 @@
                   </>
                 )}
                 
+                {/* MISIÓN 1: Formulario de Ingredientes con Ajuste Manual */}
                 {modalType === 'addIngredient' && (
                    <form onSubmit={handleSaveIngredient} className="space-y-4">
-                     <h3 className="text-xl font-bold text-gray-800 mb-4">{editingIngredient ? 'Editar Ingrediente' : 'Añadir Ingrediente'}</h3>
+                     <h3 className="text-xl font-bold text-gray-800 mb-4">{editingIngredient ? 'Editar / Ajustar Ingrediente' : 'Añadir Ingrediente'}</h3>
                      <div>
                        <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
                        <input required name="name" type="text" defaultValue={editingIngredient?.name} className="w-full border border-gray-300 p-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ej: Harina de Trigo" />
@@ -904,11 +985,21 @@
                          <option value="ml">Mililitros (ml)</option>
                          <option value="ud">Unidades (ud)</option>
                        </select>
-                       <p className="text-xs text-gray-500 mt-1">El sistema convertirá a Kilos o Litros automáticamente cuando pases de 1000.</p>
                      </div>
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-1">Stock Exacto</label>
+                         <input required name="stock" type="number" step="0.1" defaultValue={editingIngredient?.stock || 0} className="w-full border border-gray-300 p-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" title="Modifica esto si perdiste material o hubo error." />
+                       </div>
+                       <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-1">Costo Promedio ($)</label>
+                         <input required name="costPerUnit" type="number" step="0.0001" defaultValue={editingIngredient?.costPerUnit || 0} className="w-full border border-gray-300 p-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" />
+                       </div>
+                     </div>
+                     {editingIngredient && <p className="text-xs text-orange-600 mt-1 font-medium">Nota: Puedes modificar el stock o costo libremente para registrar mermas o corregir errores manuales.</p>}
                      <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                       <button type="button" onClick={()=>{setShowModal(false); setEditingIngredient(null);}} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                       <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm">Guardar</button>
+                       <button type="button" onClick={()=>{setShowModal(false); setEditingIngredient(null);}} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium">Cancelar</button>
+                       <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm font-bold">Guardar</button>
                      </div>
                    </form>
                 )}
@@ -936,7 +1027,7 @@
                      </div>
                      <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                        <button type="button" onClick={()=>setShowModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                       <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm">Registrar Compra</button>
+                       <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm font-bold">Registrar Compra</button>
                      </div>
                    </form>
                 )}
@@ -958,6 +1049,28 @@
                     <div className="flex justify-end gap-3 pt-4">
                       <button type="button" onClick={()=>setShowModal(false)} className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold w-full">Cancelar</button>
                       <button type="submit" className="px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 shadow-md font-black w-full uppercase">Sí, Borrar Todo</button>
+                    </div>
+                  </form>
+                )}
+                
+                {/* MISIÓN 3: MODAL DE CIERRE DE CICLO CONTABLE */}
+                {modalType === 'closeCycle' && (
+                  <form onSubmit={handleCloseCycle} className="space-y-4">
+                    <div className="bg-gray-800 text-white p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-2 shadow-inner">
+                      <Icon name="book" className="w-10 h-10" />
+                    </div>
+                    <h3 className="text-2xl font-black text-center text-gray-800">Cierre de Ciclo de Caja</h3>
+                    <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl text-center">
+                       <p className="text-sm text-gray-700 mb-2">Esto guardará la ganancia en el historial, y borrará de la pantalla principal las ventas y gastos actuales.</p>
+                       <p className="text-sm font-bold text-emerald-600 mb-3">Tu inventario y deudores se mantendrán intactos para el nuevo mes.</p>
+                       <p className="text-xs text-gray-600">Para confirmar, escribe la palabra <span className="font-mono font-bold text-gray-800 bg-gray-200 px-2 py-0.5 rounded">CERRAR</span> abajo.</p>
+                    </div>
+                    <div>
+                      <input required name="confirmText" type="text" className="w-full border-2 border-gray-300 p-3 rounded-xl outline-none focus:ring-2 focus:ring-gray-800 text-center font-bold text-xl uppercase tracking-widest" placeholder="Escribe CERRAR" />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4">
+                      <button type="button" onClick={()=>setShowModal(false)} className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold w-full">Cancelar</button>
+                      <button type="submit" className="px-4 py-3 bg-gray-900 text-white rounded-xl hover:bg-black shadow-md font-black w-full uppercase">Sí, Cerrar Caja</button>
                     </div>
                   </form>
                 )}
